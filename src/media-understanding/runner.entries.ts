@@ -5,10 +5,11 @@ import {
   executeWithApiKeyRotation,
 } from "../agents/api-key-rotation.js";
 import { requireApiKey, resolveApiKeyForProvider } from "../agents/model-auth.js";
+import { findNormalizedProviderValue } from "../agents/provider-id.js";
 import {
   mergeModelProviderRequestOverrides,
   sanitizeConfiguredModelProviderRequest,
-  sanitizeConfiguredProviderRequest,
+  type ModelProviderRequestTransportOverrides,
 } from "../agents/provider-request-config.js";
 import type { MsgContext } from "../auto-reply/templating.js";
 import { applyTemplate } from "../auto-reply/templating.js";
@@ -392,22 +393,57 @@ async function resolveProviderExecutionAuth(params: {
   providerId: string;
   cfg: OpenClawConfig;
   entry: MediaUnderstandingModelConfig;
+  request?: ModelProviderRequestTransportOverrides;
   agentDir?: string;
 }) {
-  const auth = await resolveApiKeyForProvider({
-    provider: params.providerId,
-    cfg: params.cfg,
-    profileId: params.entry.profile,
-    preferredProfile: params.entry.preferredProfile,
-    agentDir: params.agentDir,
-  });
   return {
-    apiKeys: collectProviderApiKeysForExecution({
+    apiKeys: await resolveProviderExecutionApiKeys(params),
+  };
+}
+
+function resolveRequestAuthExecutionKey(
+  request: ModelProviderRequestTransportOverrides | undefined,
+): string | undefined {
+  const auth = request?.auth;
+  if (auth?.mode === "authorization-bearer") {
+    return auth.token.trim() || undefined;
+  }
+  if (auth?.mode === "header") {
+    return auth.value.trim() || undefined;
+  }
+  return undefined;
+}
+
+async function resolveProviderExecutionApiKeys(params: {
+  providerId: string;
+  cfg: OpenClawConfig;
+  entry: MediaUnderstandingModelConfig;
+  request?: ModelProviderRequestTransportOverrides;
+  agentDir?: string;
+}): Promise<string[]> {
+  const requestAuthKey = resolveRequestAuthExecutionKey(params.request);
+  try {
+    const auth = await resolveApiKeyForProvider({
+      provider: params.providerId,
+      cfg: params.cfg,
+      profileId: params.entry.profile,
+      preferredProfile: params.entry.preferredProfile,
+      agentDir: params.agentDir,
+    });
+    return collectProviderApiKeysForExecution({
       provider: params.providerId,
       primaryApiKey: requireApiKey(auth, params.providerId),
-    }),
-    providerConfig: params.cfg.models?.providers?.[params.providerId],
-  };
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (requestAuthKey && message.includes("No API key")) {
+      return collectProviderApiKeysForExecution({
+        provider: params.providerId,
+        primaryApiKey: requestAuthKey,
+      });
+    }
+    throw error;
+  }
 }
 
 async function resolveProviderExecutionContext(params: {
@@ -417,10 +453,20 @@ async function resolveProviderExecutionContext(params: {
   config?: MediaUnderstandingConfig;
   agentDir?: string;
 }) {
-  const { apiKeys, providerConfig } = await resolveProviderExecutionAuth({
+  const configuredProviders = params.cfg.models?.providers;
+  const providerConfig =
+    configuredProviders?.[params.providerId] ??
+    findNormalizedProviderValue(configuredProviders, params.providerId);
+  const request = mergeModelProviderRequestOverrides(
+    sanitizeConfiguredModelProviderRequest(providerConfig?.request),
+    sanitizeConfiguredModelProviderRequest(params.config?.request),
+    sanitizeConfiguredModelProviderRequest(params.entry.request),
+  );
+  const { apiKeys } = await resolveProviderExecutionAuth({
     providerId: params.providerId,
     cfg: params.cfg,
     entry: params.entry,
+    request,
     agentDir: params.agentDir,
   });
   const baseUrl = params.entry.baseUrl ?? params.config?.baseUrl ?? providerConfig?.baseUrl;
@@ -430,11 +476,6 @@ async function resolveProviderExecutionContext(params: {
     ...sanitizeProviderHeaders(params.entry.headers as Record<string, unknown> | undefined),
   };
   const headers = Object.keys(mergedHeaders).length > 0 ? mergedHeaders : undefined;
-  const request = mergeModelProviderRequestOverrides(
-    sanitizeConfiguredModelProviderRequest(providerConfig?.request),
-    sanitizeConfiguredProviderRequest(params.config?.request),
-    sanitizeConfiguredProviderRequest(params.entry.request),
-  );
   return { apiKeys, baseUrl, headers, request };
 }
 

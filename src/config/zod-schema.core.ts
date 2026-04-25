@@ -758,6 +758,11 @@ const MediaUnderstandingRuntimeFields = {
   request: ConfiguredProviderRequestSchema,
 };
 
+const MediaUnderstandingAudioRuntimeFields = {
+  ...MediaUnderstandingRuntimeFields,
+  request: ConfiguredModelProviderRequestSchema,
+};
+
 export const MediaUnderstandingModelSchema = z
   .object({
     provider: z.string().optional(),
@@ -769,6 +774,23 @@ export const MediaUnderstandingModelSchema = z
     maxChars: z.number().int().positive().optional(),
     maxBytes: z.number().int().positive().optional(),
     ...MediaUnderstandingRuntimeFields,
+    profile: z.string().optional(),
+    preferredProfile: z.string().optional(),
+  })
+  .strict()
+  .optional();
+
+const MediaUnderstandingAudioModelSchema = z
+  .object({
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    capabilities: MediaUnderstandingCapabilitiesSchema,
+    type: z.union([z.literal("provider"), z.literal("cli")]).optional(),
+    command: z.string().optional(),
+    args: z.array(z.string()).optional(),
+    maxChars: z.number().int().positive().optional(),
+    maxBytes: z.number().int().positive().optional(),
+    ...MediaUnderstandingAudioRuntimeFields,
     profile: z.string().optional(),
     preferredProfile: z.string().optional(),
   })
@@ -790,6 +812,21 @@ export const ToolsMediaUnderstandingSchema = z
   .strict()
   .optional();
 
+const ToolsMediaAudioUnderstandingSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    scope: MediaUnderstandingScopeSchema,
+    maxBytes: z.number().int().positive().optional(),
+    maxChars: z.number().int().positive().optional(),
+    ...MediaUnderstandingAudioRuntimeFields,
+    attachments: MediaUnderstandingAttachmentsSchema,
+    models: z.array(MediaUnderstandingAudioModelSchema).optional(),
+    echoTranscript: z.boolean().optional(),
+    echoFormat: z.string().optional(),
+  })
+  .strict()
+  .optional();
+
 export const ToolsMediaSchema = z
   .object({
     models: z.array(MediaUnderstandingModelSchema).optional(),
@@ -801,7 +838,7 @@ export const ToolsMediaSchema = z
       .strict()
       .optional(),
     image: ToolsMediaUnderstandingSchema.optional(),
-    audio: ToolsMediaUnderstandingSchema.optional(),
+    audio: ToolsMediaAudioUnderstandingSchema.optional(),
     video: ToolsMediaUnderstandingSchema.optional(),
   })
   .strict()
