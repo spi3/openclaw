@@ -33,7 +33,9 @@ export type MediaUnderstandingAttachmentsConfig = {
   prefer?: "first" | "last" | "path" | "url";
 };
 
-type MediaProviderRequestConfig = {
+type MediaProviderRequestConfig<
+  RequestConfig extends ConfiguredProviderRequest = ConfiguredProviderRequest,
+> = {
   /** Optional provider-specific query params (merged into requests). */
   providerOptions?: Record<string, Record<string, string | number | boolean>>;
   /** @deprecated Use providerOptions.deepgram instead. */
@@ -47,10 +49,12 @@ type MediaProviderRequestConfig = {
   /** Optional headers merged into provider requests. */
   headers?: Record<string, string>;
   /** Optional request transport overrides for provider HTTP calls. */
-  request?: ConfiguredProviderRequest;
+  request?: RequestConfig;
 };
 
-export type MediaUnderstandingModelConfig = MediaProviderRequestConfig & {
+export type MediaUnderstandingModelConfig<
+  RequestConfig extends ConfiguredProviderRequest = ConfiguredProviderRequest,
+> = MediaProviderRequestConfig<RequestConfig> & {
   /** provider API id (e.g. openai, google). */
   provider?: string;
   /** Model id for provider-based understanding. */
@@ -79,7 +83,9 @@ export type MediaUnderstandingModelConfig = MediaProviderRequestConfig & {
   preferredProfile?: string;
 };
 
-export type MediaUnderstandingConfig = MediaProviderRequestConfig & {
+export type MediaUnderstandingConfig<
+  RequestConfig extends ConfiguredProviderRequest = ConfiguredProviderRequest,
+> = MediaProviderRequestConfig<RequestConfig> & {
   /** Enable media understanding when models are configured. */
   enabled?: boolean;
   /** Optional scope gating for understanding. */
@@ -97,7 +103,7 @@ export type MediaUnderstandingConfig = MediaProviderRequestConfig & {
   /** Attachment selection policy. */
   attachments?: MediaUnderstandingAttachmentsConfig;
   /** Ordered model list (fallbacks in order). */
-  models?: MediaUnderstandingModelConfig[];
+  models?: MediaUnderstandingModelConfig<RequestConfig>[];
   /**
    * Echo the audio transcript back to the originating chat before agent processing.
    * Lets users verify what was heard. Default: false.
